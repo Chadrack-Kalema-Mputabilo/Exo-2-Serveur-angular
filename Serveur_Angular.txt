@@ -1,0 +1,144 @@
+Pour mettre en place la journalisation d'un site web Angular avec deux routes (`/home` et `/help`) et enregistrer chaque visite dans un fichier `.txt`, vous devrez suivre une approche qui implique un serveur backend. Angular, étant un framework frontend, ne peut pas écrire directement dans un fichier sur le serveur. Voici comment procéder :
+
+### Étapes à suivre
+
+1. **Configurer le projet Angular** :
+   Si vous n'avez pas encore de projet Angular, créez-en un.
+
+   ```bash
+   ng new journalisation-site
+   cd journalisation-site
+   ng generate component home
+   ng generate component help
+   ```
+
+2. **Configurer les routes** :
+   Mettez à jour le fichier `app-routing.module.ts` pour ajouter les routes.
+
+   ```typescript
+   import { NgModule } from '@angular/core';
+   import { RouterModule, Routes } from '@angular/router';
+   import { HomeComponent } from './home/home.component';
+   import { HelpComponent } from './help/help.component';
+
+   const routes: Routes = [
+     { path: 'home', component: HomeComponent },
+     { path: 'help', component: HelpComponent },
+     { path: '', redirectTo: '/home', pathMatch: 'full' },
+   ];
+
+   @NgModule({
+     imports: [RouterModule.forRoot(routes)],
+     exports: [RouterModule]
+   })
+   export class AppRoutingModule { }
+   ```
+
+3. **Créer un service pour la journalisation** :
+   Créez un service Angular qui enverra des requêtes à votre serveur.
+
+   ```bash
+   ng generate service logging
+   ```
+
+   Dans `logging.service.ts`, ajoutez le code suivant :
+
+   ```typescript
+   import { Injectable } from '@angular/core';
+   import { HttpClient } from '@angular/common/http';
+   import { Router, NavigationEnd } from '@angular/router';
+   import { filter } from 'rxjs/operators';
+
+   @Injectable({
+     providedIn: 'root'
+   })
+   export class LoggingService {
+     private logUrl = 'http://localhost:3000/log'; // L'URL de votre serveur
+
+     constructor(private http: HttpClient, private router: Router) {
+       this.router.events
+         .pipe(filter(event => event instanceof NavigationEnd))
+         .subscribe(() => {
+           this.logVisit(this.router.url);
+         });
+     }
+
+     logVisit(url: string) {
+       const visitData = { url, timestamp: new Date().toISOString() };
+       this.http.post(this.logUrl, visitData).subscribe();
+     }
+   }
+   ```
+
+4. **Ajouter le service au module principal** :
+   Assurez-vous d'importer `HttpClientModule` dans votre `app.module.ts`.
+
+   ```typescript
+   import { HttpClientModule } from '@angular/common/http';
+
+   @NgModule({
+     declarations: [/* vos composants */],
+     imports: [
+       // autres modules
+       HttpClientModule,
+     ],
+     providers: [],
+     bootstrap: [/* votre composant principal */]
+   })
+   export class AppModule { }
+   ```
+
+5. **Créer un serveur Node.js pour la journalisation** :
+   Créez un fichier `server.js` dans un nouveau dossier (par exemple, `server`).
+
+   ```javascript
+   const express = require('express');
+   const fs = require('fs');
+   const path = require('path');
+   const app = express();
+   const PORT = 3000;
+
+   app.use(express.json());
+
+   app.post('/log', (req, res) => {
+       const logEntry = `${req.body.timestamp} - Visite: ${req.body.url}\n`;
+       fs.appendFile(path.join(__dirname, 'visits.log'), logEntry, (err) => {
+           if (err) {
+               console.error('Erreur lors de l\'écriture dans le fichier:', err);
+               return res.status(500).send('Erreur serveur');
+           }
+           res.status(200).send('Visite enregistrée');
+       });
+   });
+
+   app.listen(PORT, () => {
+       console.log(`Serveur en cours d'exécution sur http://localhost:${PORT}`);
+   });
+   ```
+
+6. **Exécuter le serveur** :
+   Installez Express si vous ne l'avez pas déjà fait.
+
+   ```bash
+   npm init -y
+   npm install express
+   ```
+
+   Ensuite, exécutez le serveur :
+
+   ```bash
+   node server.js
+   ```
+
+7. **Tester l'application** :
+   Démarrez votre application Angular.
+
+   ```bash
+   ng serve
+   ```
+
+   Ouvrez votre navigateur et visitez `http://localhost:4200/home` et `http://localhost:4200/help`. Chaque visite sera enregistrée dans le fichier `visits.log` sur le serveur.
+
+### Résumé
+
+Cette approche implique la création d'un service Angular pour enregistrer les visites et d'un serveur Node.js pour gérer les requêtes de journalisation. Vous pouvez étendre cette base selon vos besoins spécifiques.
